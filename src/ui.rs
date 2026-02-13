@@ -76,7 +76,7 @@ impl Ui {
                         Block::default()
                             .borders(Borders::ALL)
                             .border_style(Style::default().fg(Color::Rgb(255, 165, 0))) // Orange color
-                            .title("HN CLI")
+                            .title("HN Reader")
                             .title_alignment(Alignment::Center),
                     );
                 f.render_widget(title, chunks[0]);
