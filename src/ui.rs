@@ -15,6 +15,7 @@ use std::io;
 
 pub struct Ui {
     pub selected_index: usize,
+    pub current_page: u32,
     terminal: Option<Terminal<CrosstermBackend<io::Stdout>>>,
     list_state: ListState,
 }
@@ -26,6 +27,7 @@ impl Ui {
         
         Ui {
             selected_index: 0,
+            current_page: 0,
             terminal: None,
             list_state,
         }
@@ -45,12 +47,60 @@ impl Ui {
         if let Some(mut terminal) = self.terminal.take() {
             let _ = execute!(terminal.backend_mut(), terminal::LeaveAlternateScreen);
             let _ = terminal.show_cursor();
-            let _ = terminal.clear();
         }
         let _ = terminal::disable_raw_mode();
     }
 
-    pub fn render(&mut self, articles: &[Article]) {
+    pub fn render_loading(&mut self) {
+        if let Some(ref mut terminal) = self.terminal {
+            let page = self.current_page;
+            let _ = terminal.draw(|f| {
+                let size = f.area();
+
+                let chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([
+                        Constraint::Length(3),
+                        Constraint::Min(1),
+                        Constraint::Length(3),
+                    ])
+                    .split(size);
+
+                let title = Paragraph::new("Hacker News Top Stories")
+                    .style(Style::default().fg(Color::Yellow))
+                    .alignment(Alignment::Center)
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .border_style(Style::default().fg(Color::Rgb(255, 165, 0)))
+                            .title("HN Reader")
+                            .title_alignment(Alignment::Center),
+                    );
+                f.render_widget(title, chunks[0]);
+
+                let loading = Paragraph::new(format!("Loading page {}...", page + 1))
+                    .style(Style::default().fg(Color::Yellow))
+                    .alignment(Alignment::Center)
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .border_style(Style::default().fg(Color::Rgb(255, 165, 0))),
+                    );
+                f.render_widget(loading, chunks[1]);
+
+                let footer = Paragraph::new("Commands: ↑↓ Navigate | ←→ Page | Enter Open | r Refresh | q Quit")
+                    .style(Style::default().fg(Color::DarkGray))
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .border_style(Style::default().fg(Color::Rgb(255, 165, 0))),
+                    );
+                f.render_widget(footer, chunks[2]);
+            });
+        }
+    }
+
+    pub fn render(&mut self, articles: &[Article], total_pages: u32) {
         // Update the list state with the current selection
         self.list_state.select(Some(self.selected_index));
         
@@ -68,8 +118,13 @@ impl Ui {
                     ])
                     .split(size);
 
-                // Title
-                let title = Paragraph::new("Hacker News Top Stories")
+                // Title with page indicator
+                let title_text = format!(
+                    "Hacker News Top Stories — Page {} / {}",
+                    self.current_page + 1,
+                    total_pages
+                );
+                let title = Paragraph::new(title_text)
                     .style(Style::default().fg(Color::Yellow))
                     .alignment(Alignment::Center)
                     .block(
@@ -82,17 +137,19 @@ impl Ui {
                 f.render_widget(title, chunks[0]);
 
                 // Articles list
+                let page_offset = (self.current_page as usize) * 20;
                 let items: Vec<ListItem> = articles
                     .iter()
                     .enumerate()
                     .map(|(i, article)| {
                         // Parse the date to make it more readable
                         let date_str = parse_date(&article.created_at);
+                        let global_index = page_offset + i + 1;
                         
                         let line = if i == self.selected_index {
-                            format!("> {}. {} (Score: {}, Date: {})", i + 1, article.title, article.score, date_str)
+                            format!("> {}. {} (Score: {}, Date: {})", global_index, article.title, article.score, date_str)
                         } else {
-                            format!("  {}. {} (Score: {}, Date: {})", i + 1, article.title, article.score, date_str)
+                            format!("  {}. {} (Score: {}, Date: {})", global_index, article.title, article.score, date_str)
                         };
                         ListItem::new(line)
                     })
@@ -113,7 +170,7 @@ impl Ui {
                 f.render_stateful_widget(articles_list, chunks[1], &mut self.list_state);
 
                 // Footer
-                let footer = Paragraph::new("Commands: ↑↓ Navigate | Enter Open | r Refresh | q Quit")
+                let footer = Paragraph::new("Commands: ↑↓ Navigate | ←→ Page | Enter Open | r Refresh | q Quit")
                     .style(Style::default().fg(Color::DarkGray))
                     .block(
                         Block::default()
@@ -125,7 +182,7 @@ impl Ui {
         }
     }
 
-    pub async fn handle_input(&mut self, articles_len: usize) -> char {
+    pub async fn handle_input(&mut self, articles_len: usize, total_pages: u32) -> char {
         if event::poll(std::time::Duration::from_millis(50)).unwrap() {
             if let Event::Key(KeyEvent { code, .. }) = event::read().unwrap() {
                 match code {
@@ -133,14 +190,25 @@ impl Ui {
                         if self.selected_index > 0 {
                             self.selected_index -= 1;
                         }
-                        // Don't wrap around if at the first item
                     }
                     KeyCode::Down => {
-                        // Only allow moving down if we're not at the last item
                         if articles_len > 0 && self.selected_index < articles_len - 1 {
                             self.selected_index += 1;
                         }
-                        // Don't wrap around if at the last item
+                    }
+                    KeyCode::Left => {
+                        if self.current_page > 0 {
+                            self.current_page -= 1;
+                            self.selected_index = 0;
+                            return 'p'; // previous page
+                        }
+                    }
+                    KeyCode::Right => {
+                        if self.current_page < total_pages.saturating_sub(1) {
+                            self.current_page += 1;
+                            self.selected_index = 0;
+                            return 'n'; // next page
+                        }
                     }
                     KeyCode::Char('q') => return 'q',
                     KeyCode::Char('r') => return 'r',
@@ -192,6 +260,7 @@ mod tests {
         let ui = Ui::new();
         
         assert_eq!(ui.selected_index, 0);
+        assert_eq!(ui.current_page, 0);
         assert!(ui.terminal.is_none());
     }
 

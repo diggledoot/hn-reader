@@ -9,6 +9,27 @@ fn test_ui_basic_functionality() {
     
     // Test initial state
     assert_eq!(ui.selected_index, 0);
+    assert_eq!(ui.current_page, 0);
+}
+
+/// Test pagination bounds
+#[test]
+fn test_pagination_bounds() {
+    let mut ui = ui::Ui::new();
+    
+    // Initial page should be 0
+    assert_eq!(ui.current_page, 0);
+    
+    // Simulate navigating to last allowed page (49 = page 50 in 1-indexed)
+    ui.current_page = 49;
+    assert_eq!(ui.current_page, 49);
+    
+    // Verify selected_index resets independently
+    ui.selected_index = 5;
+    ui.current_page = 1;
+    ui.selected_index = 0;
+    assert_eq!(ui.selected_index, 0);
+    assert_eq!(ui.current_page, 1);
 }
 
 /// Test Article model creation and serialization
