@@ -1,8 +1,9 @@
-use crate::models::ApiResponse;
+use crate::models::{ApiResponse, ItemResponse};
 use std::error::Error;
 
 // Using the Algolia API to get stories with high points (scores)
 const ALGOLIA_API_URL: &str = "https://hn.algolia.com/api/v1/search";
+const ALGOLIA_ITEMS_URL: &str = "https://hn.algolia.com/api/v1/items";
 
 pub async fn fetch_top_stories(page: u32) -> Result<ApiResponse, Box<dyn Error>> {
     // Get stories from the last 24 hours
@@ -23,6 +24,13 @@ pub async fn fetch_top_stories(page: u32) -> Result<ApiResponse, Box<dyn Error>>
     let api_response: ApiResponse = response.json().await?;
     
     Ok(api_response)
+}
+
+pub async fn fetch_comments(story_id: &str) -> Result<ItemResponse, Box<dyn Error>> {
+    let url = format!("{}/{}", ALGOLIA_ITEMS_URL, story_id);
+    let response = reqwest::get(&url).await?;
+    let item_response: ItemResponse = response.json().await?;
+    Ok(item_response)
 }
 
 #[cfg(test)]

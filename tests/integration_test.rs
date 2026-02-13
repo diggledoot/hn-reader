@@ -128,6 +128,124 @@ async fn test_api_with_edge_cases() {
     assert!(zero_page_url.contains("page=0"));
 }
 
+/// Test HTML tag stripping
+#[test]
+fn test_strip_html_tags() {
+    use hn_reader::ui::strip_html_tags;
+
+    // Basic <p> tags
+    assert_eq!(strip_html_tags("Hello<p>World"), "Hello\nWorld");
+
+    // HTML entities
+    assert_eq!(strip_html_tags("it&#x27;s &amp; that"), "it's & that");
+    assert_eq!(strip_html_tags("&lt;tag&gt;"), "<tag>");
+    assert_eq!(strip_html_tags("&quot;quoted&quot;"), "\"quoted\"");
+    assert_eq!(strip_html_tags("path&#x2F;to&#x2F;file"), "path/to/file");
+
+    // Links - strip tags, keep text
+    assert_eq!(
+        strip_html_tags("click <a href=\"https://example.com\">here</a> now"),
+        "click here now"
+    );
+
+    // <br> variants
+    assert_eq!(strip_html_tags("line1<br>line2"), "line1\nline2");
+    assert_eq!(strip_html_tags("line1<br/>line2"), "line1\nline2");
+
+    // Empty string
+    assert_eq!(strip_html_tags(""), "");
+
+    // No tags
+    assert_eq!(strip_html_tags("plain text"), "plain text");
+}
+
+/// Test comment flattening
+#[test]
+fn test_flatten_comments() {
+    use hn_reader::models::Comment;
+    use hn_reader::ui::flatten_comments;
+
+    let comments = vec![
+        Comment {
+            id: 1,
+            author: Some("alice".to_string()),
+            text: Some("Top level comment".to_string()),
+            created_at: Some("2025-01-01T12:00:00Z".to_string()),
+            children: vec![
+                Comment {
+                    id: 2,
+                    author: Some("bob".to_string()),
+                    text: Some("Reply to alice".to_string()),
+                    created_at: Some("2025-01-01T13:00:00Z".to_string()),
+                    children: vec![
+                        Comment {
+                            id: 3,
+                            author: Some("charlie".to_string()),
+                            text: Some("Nested reply".to_string()),
+                            created_at: Some("2025-01-01T14:00:00Z".to_string()),
+                            children: vec![],
+                        },
+                    ],
+                },
+            ],
+        },
+        Comment {
+            id: 4,
+            author: Some("dave".to_string()),
+            text: Some("Another top level".to_string()),
+            created_at: Some("2025-01-01T15:00:00Z".to_string()),
+            children: vec![],
+        },
+    ];
+
+    let flat = flatten_comments(&comments, 0);
+
+    assert_eq!(flat.len(), 4);
+
+    assert_eq!(flat[0].depth, 0);
+    assert_eq!(flat[0].author, "alice");
+    assert_eq!(flat[0].text, "Top level comment");
+
+    assert_eq!(flat[1].depth, 1);
+    assert_eq!(flat[1].author, "bob");
+
+    assert_eq!(flat[2].depth, 2);
+    assert_eq!(flat[2].author, "charlie");
+
+    assert_eq!(flat[3].depth, 0);
+    assert_eq!(flat[3].author, "dave");
+}
+
+/// Test flatten_comments with deleted/empty comments
+#[test]
+fn test_flatten_comments_deleted() {
+    use hn_reader::models::Comment;
+    use hn_reader::ui::flatten_comments;
+
+    let comments = vec![Comment {
+        id: 1,
+        author: None,
+        text: None,
+        created_at: None,
+        children: vec![],
+    }];
+
+    let flat = flatten_comments(&comments, 0);
+    assert_eq!(flat.len(), 1);
+    assert_eq!(flat[0].author, "[deleted]");
+    assert_eq!(flat[0].text, "[deleted]");
+}
+
+/// Test view mode initialization
+#[test]
+fn test_view_mode_default() {
+    use hn_reader::ui::ViewMode;
+    let ui = ui::Ui::new();
+    assert_eq!(ui.view_mode, ViewMode::Articles);
+    assert!(ui.comments.is_empty());
+    assert_eq!(ui.comment_scroll, 0);
+}
+
 /// Test that we can fetch articles from the API (requires internet connection)
 #[tokio::test]
 #[ignore] // Ignore by default to avoid network dependency in CI

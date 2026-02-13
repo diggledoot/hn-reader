@@ -1,4 +1,4 @@
-use hn_reader::{api::fetch_top_stories, models, ui::Ui};
+use hn_reader::{api::{fetch_top_stories, fetch_comments}, models, ui::{Ui, ViewMode, flatten_comments}};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -47,6 +47,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // Next or previous page (current_page already updated by handle_input)
                 should_refresh = true;
             },
+            'c' => {
+                // Open comments for selected article
+                if let Some(ref arts) = articles {
+                    if let Some(article) = arts.get(ui.selected_index) {
+                        let story_id = article.object_id.clone();
+                        let title = article.title.clone();
+                        ui.render_comments_loading(&title);
+                        match fetch_comments(&story_id).await {
+                            Ok(item) => {
+                                ui.comments = flatten_comments(&item.children, 0);
+                                ui.comment_scroll = 0;
+                                ui.comment_title = title;
+                                ui.view_mode = ViewMode::Comments;
+                                ui.render_comments();
+                            }
+                            Err(e) => {
+                                eprintln!("Error fetching comments: {}", e);
+                                ui.render(arts, total_pages);
+                            }
+                        }
+                    }
+                }
+            },
+            'b' => {
+                // Back to articles from comments
+                if let Some(ref arts) = articles {
+                    ui.render(arts, total_pages);
+                }
+            },
             'l' => {
                 // Open selected article
                 if let Some(ref arts) = articles {
@@ -57,8 +86,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             },
             _ => {
                 // Other inputs, just refresh the display to update cursor position
-                if let Some(ref arts) = articles {
-                    ui.render(arts, total_pages);
+                match ui.view_mode {
+                    ViewMode::Comments => {
+                        ui.render_comments();
+                    }
+                    ViewMode::Articles => {
+                        if let Some(ref arts) = articles {
+                            ui.render(arts, total_pages);
+                        }
+                    }
                 }
             }
         }
