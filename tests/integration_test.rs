@@ -1,6 +1,6 @@
 //! Integration tests for the Hacker News CLI application
 
-use hn_cli::{api, models, ui};
+use hn_reader::{api, models, ui};
 
 /// Test UI initialization and basic functionality
 #[test]

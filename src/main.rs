@@ -1,4 +1,4 @@
-use hn_cli::{api::fetch_top_stories, models, ui::Ui};
+use hn_reader::{api::fetch_top_stories, models, ui::Ui};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

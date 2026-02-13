@@ -8,7 +8,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
-    Frame, Terminal,
+    Terminal,
 };
 use ratatui::layout::Alignment;
 use std::io;
@@ -56,7 +56,7 @@ impl Ui {
         
         if let Some(ref mut terminal) = self.terminal {
             let _ = terminal.draw(|f| {
-                let size = f.size();
+                let size = f.area();
                 
                 // Define the main layout
                 let chunks = Layout::default()

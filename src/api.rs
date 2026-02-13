@@ -1,5 +1,4 @@
 use crate::models::ApiResponse;
-use reqwest;
 use std::error::Error;
 
 // Using the Algolia API to get stories with high points (scores)
