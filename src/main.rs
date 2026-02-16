@@ -1,4 +1,4 @@
-use hn_reader::{api::{fetch_top_stories, fetch_comments}, models, ui::{Ui, ViewMode, flatten_comments}};
+use hn_reader::{api::{fetch_top_stories}, models, ui::{Ui, ViewMode}};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -14,8 +14,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Show loading indicator
             ui.render_loading();
 
-            // Fetch articles for the current page
-            match fetch_top_stories(ui.current_page).await {
+            // Fetch articles for the current page based on view mode
+            let fetch_result = match ui.view_mode {
+                ViewMode::Articles => fetch_top_stories(ui.current_page).await,
+            };
+
+            match fetch_result {
                 Ok(mut response) => {
                     // Cap total pages at 50
                     total_pages = response.nb_pages.min(50);
@@ -47,54 +51,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // Next or previous page (current_page already updated by handle_input)
                 should_refresh = true;
             },
-            'c' => {
-                // Open comments for selected article
-                if let Some(ref arts) = articles {
-                    if let Some(article) = arts.get(ui.selected_index) {
-                        let story_id = article.object_id.clone();
-                        let title = article.title.clone();
-                        ui.render_comments_loading(&title);
-                        match fetch_comments(&story_id).await {
-                            Ok(item) => {
-                                ui.comments = flatten_comments(&item.children, 0);
-                                ui.comment_scroll = 0;
-                                ui.comment_title = title;
-                                ui.view_mode = ViewMode::Comments;
-                                ui.render_comments();
-                            }
-                            Err(e) => {
-                                eprintln!("Error fetching comments: {}", e);
-                                ui.render(arts, total_pages);
-                            }
-                        }
-                    }
-                }
-            },
-            'b' => {
-                // Back to articles from comments
-                if let Some(ref arts) = articles {
-                    ui.render(arts, total_pages);
-                }
-            },
-            'l' => {
-                // Open selected article
+            'e' => {
+                // Open selected article (external URL)
                 if let Some(ref arts) = articles {
                     ui.open_selected_article(arts);
                     // Re-render after opening link to maintain UI state
                     ui.render(arts, total_pages);
                 }
             },
+            'c' => {
+                // Open HN discussion thread
+                if let Some(ref arts) = articles {
+                    ui.open_hn_discussion(arts);
+                    // Re-render after opening link to maintain UI state
+                    ui.render(arts, total_pages);
+                }
+            },
             _ => {
                 // Other inputs, just refresh the display to update cursor position
-                match ui.view_mode {
-                    ViewMode::Comments => {
-                        ui.render_comments();
-                    }
-                    ViewMode::Articles => {
-                        if let Some(ref arts) = articles {
-                            ui.render(arts, total_pages);
-                        }
-                    }
+                if let Some(ref arts) = articles {
+                    ui.render(arts, total_pages);
                 }
             }
         }

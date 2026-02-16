@@ -10,19 +10,33 @@ pub async fn fetch_top_stories(page: u32) -> Result<ApiResponse, Box<dyn Error>>
     let one_day_ago = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
-        .as_secs() 
+        .as_secs()
         - 24 * 60 * 60; // 24 hours in seconds
-    
+
     let url = format!(
         "{}?tags=story&hitsPerPage=20&page={}&numericFilters=created_at_i>{}",
-        ALGOLIA_API_URL, 
+        ALGOLIA_API_URL,
         page,
         one_day_ago
     );
-    
+
     let response = reqwest::get(&url).await?;
     let api_response: ApiResponse = response.json().await?;
-    
+
+    Ok(api_response)
+}
+
+pub async fn fetch_front_page_stories(page: u32) -> Result<ApiResponse, Box<dyn Error>> {
+    // Get front page (trending) stories
+    let url = format!(
+        "{}?tags=front_page_story&hitsPerPage=20&page={}",
+        ALGOLIA_API_URL,
+        page
+    );
+
+    let response = reqwest::get(&url).await?;
+    let api_response: ApiResponse = response.json().await?;
+
     Ok(api_response)
 }
 
@@ -87,17 +101,46 @@ mod tests {
             ALGOLIA_API_URL, max_page
         );
         assert!(expected_url.contains(&format!("page={}", max_page)));
-        
+
         // Test with page 0
         let zero_page_url = format!(
             "{}?tags=story&hitsPerPage=20&page=0&numericFilters=points>0",
             ALGOLIA_API_URL
         );
         assert!(zero_page_url.contains("page=0"));
-        
+
         // Test URL contains all required parameters
         assert!(zero_page_url.contains("tags=story"));
         assert!(zero_page_url.contains("hitsPerPage=20"));
         assert!(zero_page_url.contains("numericFilters=points>0"));
+    }
+
+    #[tokio::test]
+    async fn test_fetch_front_page_stories_url() {
+        // Test URL construction for front page stories
+        let page = 0;
+        let expected_url = format!(
+            "{}?tags=front_page_story&hitsPerPage=20&page={}",
+            ALGOLIA_API_URL, page
+        );
+
+        assert!(expected_url.contains("tags=front_page_story"));
+        assert!(expected_url.contains("hitsPerPage=20"));
+        assert!(expected_url.contains("page=0"));
+    }
+
+    #[tokio::test]
+    async fn test_fetch_comments_url() {
+        // Test URL construction for fetching comments
+        let story_id = "12345678";
+        let expected_url = format!("{}/{}", ALGOLIA_ITEMS_URL, story_id);
+
+        assert_eq!(expected_url, "https://hn.algolia.com/api/v1/items/12345678");
+        assert!(expected_url.contains(story_id));
+    }
+
+    #[test]
+    fn test_constants_items_url() {
+        assert_eq!(ALGOLIA_ITEMS_URL, "https://hn.algolia.com/api/v1/items");
     }
 }
