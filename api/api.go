@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
 	"hn-reader/models"
@@ -25,14 +26,16 @@ func FetchTopStories(page int) (*models.ApiResponse, error) {
 	// Calculate timestamp for 24 hours ago
 	oneDayAgo := time.Now().Add(-24 * time.Hour).Unix()
 
-	url := fmt.Sprintf(
-		"%s?tags=story&hitsPerPage=20&page=%d&numericFilters=created_at_i>%d",
-		AlgoliaAPIURL,
-		page,
-		oneDayAgo,
-	)
+	// Build URL with proper encoding using url.Values
+	params := url.Values{}
+	params.Set("tags", "story")
+	params.Set("hitsPerPage", "20")
+	params.Set("page", fmt.Sprintf("%d", page))
+	params.Set("numericFilters", fmt.Sprintf("created_at_i>%d", oneDayAgo))
 
-	resp, err := HTTPClient.Get(url)
+	encodedURL := fmt.Sprintf("%s?%s", AlgoliaAPIURL, params.Encode())
+
+	resp, err := HTTPClient.Get(encodedURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch stories: %w", err)
 	}
